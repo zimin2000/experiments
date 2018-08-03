@@ -1,6 +1,15 @@
 import json, csv
 import dateutil.parser
 from datetime import datetime, timezone
+import pandas as pd
+import numpy as np
+
+from sklearn import linear_model
+
+import warnings
+warnings.filterwarnings(action="ignore", module="sklearn", message="^internal gelsd")
+
+EPOCH = datetime.utcfromtimestamp(0)
 
 def parse_time(s):
     """ Converts timestamp to seconds since epoch.
@@ -8,6 +17,7 @@ def parse_time(s):
 
     dt = dateutil.parser.parse(s)
 #    epoch_time = int((dt - datetime(1970, 1, 1, tzinfo=timezone.utc)).total_seconds())
+#    epoch_time = int((dt - EPOCH)).total_seconds())
     epoch_time = int(dt.replace(tzinfo=timezone.utc).timestamp())
 
     return epoch_time
@@ -15,52 +25,34 @@ def parse_time(s):
 def average_by_time(Xs):
     """ Combine list of arrays and average them grouping by timestamp. 
     """
-    X_merged = {}
 
-    for X in Xs:
-        for (t,x) in X:
-            if t not in X_merged: X_merged[t] = []
-            X_merged[t].append(x)
-
-    X_avg = {}
-
-    for t in X_merged.keys():
-        X_avg[t] = sum(X_merged[t]) / len(X_merged[t])
-
-    return list(X_avg.items())
+    return pd.concat(Xs).groupby(["ts"], as_index=False).mean()
 
 def read_json(name):
     """ Read in the JSON file and return list of pairs timestamp and value.
     """
-    DATA = json.loads(open(name).read())
 
-    return map(lambda v: (int(v[0]), float(v[1])), DATA.items())
+    JDATA = json.load(open(name))
+
+    DATA = pd.DataFrame(list(JDATA.items()), columns=["ts", "value"])
+
+    DATA['ts']  = pd.to_datetime(DATA['ts'], unit='s')
+
+    return DATA
 
 def read_csv(name):
     """ Read in the CSV file and return list of pairs timestamp and value.
     """
 
-#    DATA = []
-#    for row in csv.reader(open(name), delimiter=','):
-#        DATA.append((parse_time(row[0]), float(row[1])))
-#
-#    return DATA
+    DATA = pd.read_csv(open(name), names=["ts", "value"])
 
-    DATA = list(csv.reader(open(name), delimiter=','))
+    DATA['ts']  = pd.to_datetime(DATA['ts'])
 
-    return map(lambda v: (parse_time(v[0]), float(v[1])), DATA)
-
-
-import numpy as np
-from sklearn import linear_model
-
-import warnings
-warnings.filterwarnings(action="ignore", module="sklearn", message="^internal gelsd")
+    return DATA
 
 def linear_regression_sklearn(data):
     """ Fit linear regression model for the data. 
     """
-# Split the data into training/testing sets
     dataset = np.array(data)
 
     X_train = dataset[:,0].reshape(-1,1)
@@ -85,9 +77,11 @@ def linear_regression_manual(data):
 
     DELTA = []
 
-    dataset = sorted(data)
+    data.sort_values(by=['ts'])
 
-    for (x,y) in dataset:
+    for i, (x,y) in data.iterrows():
+
+        print(x)
         S_x += x
         S_y += y
 
@@ -103,8 +97,8 @@ def linear_regression_manual(data):
 
     a = np.array(DELTA).mean()
 
-    x_avg = S_x / len(dataset) 
-    y_avg = S_y / len(dataset) 
+    x_avg = S_x / len(data) 
+    y_avg = S_y / len(data) 
 
     return (a, y_avg - x_avg*a)
 
@@ -128,8 +122,12 @@ def linear_regression_manual2(data):
     return (a, b)
 
 def main():
-    data = average_by_time([read_csv('sensor_data/sensor1.csv'), 
-                            read_json('sensor_data/sensor2.json')])
+    data = average_by_time([read_csv('data/data1.csv'), 
+                            read_json('data/data2.json')])
+
+    data['ts'] = data['ts'].astype('int64') // 1e9
+
+#    print (data)
 
     s1 = linear_regression_sklearn(data)
 
@@ -138,10 +136,10 @@ def main():
     s3 = linear_regression_manual2(data)
 
     for i in range(len(data)):
-        print("{},{} | {} | {} | {}".format(data[i][0], data[i][1], 
-                                            s1[0]*data[i][0]+s1[1],
-                                            s2[0]*data[i][0]+s2[1],
-                                            s3[0]*data[i][0]+s3[1]))
+        print("{},{} | {} | {} | {}".format(data.loc[i][0], data.loc[i][1], 
+                                            s1[0]*data.loc[i][0]+s1[1],
+                                            s2[0]*data.loc[i][0]+s2[1],
+                                            s3[0]*data.loc[i][0]+s3[1]))
 
 if __name__ == "__main__":
     # execute only if run as a script

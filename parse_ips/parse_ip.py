@@ -80,11 +80,10 @@ def approach2(f):
 
             _, ip, l = m.groups()
 
-            if len(filter(lambda x: int(x) > 255, ip.split('.'))) <= 0:
+            if len(list(filter(lambda x: int(x) > 255, ip.split('.')))) <= 0:
                 IPS.add(ip)
-
 
     return list(IPS)
 
 
-print approach2(sys.stdin)
+print(approach2(sys.stdin))

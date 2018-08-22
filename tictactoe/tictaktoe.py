@@ -178,8 +178,6 @@ class Game:
         elif w == DRAW:  print ("Draw")
         else:            print ("In progress")
 
-#        print (board.all_moves())
-
     def run(self):
         turn = X
         w = EMPTY
